@@ -10,6 +10,15 @@ public class PlayerInteraction : MonoBehaviour
 {
     void Update()
     {
+        // No interacting while the pay slip / failure screen is up.
+        // ...or while resting/asleep (SleepSystem handles E to get up).
+        if ((NightManager.Instance && !NightManager.Instance.IsRunning)
+            || (SleepSystem.Instance && SleepSystem.Instance.IsResting))
+        {
+            Interactable.Focused = null;
+            return;
+        }
+
         Interactable nearest = FindNearest();
         Interactable.Focused = nearest;
         if (nearest == null || Keyboard.current == null) return;
