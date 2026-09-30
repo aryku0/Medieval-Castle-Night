@@ -14,6 +14,32 @@ public class CameraXYFollow : MonoBehaviour
     public float minY;
     public float maxY;
 
+    // The limits the camera started with (the main castle floor).
+    private Vector2 startMin, startMax;
+
+    private void Awake()
+    {
+        startMin = new Vector2(minX, minY);
+        startMax = new Vector2(maxX, maxY);
+    }
+
+    /// <summary>Switch to another area's limits (e.g. the cellar). Snap jumps straight there.</summary>
+    public void SetBounds(Vector2 min, Vector2 max, bool snap)
+    {
+        minX = min.x; minY = min.y;
+        maxX = max.x; maxY = max.y;
+        if (snap && target != null)
+        {
+            transform.position = new Vector3(
+                Mathf.Clamp(target.position.x, minX, maxX),
+                Mathf.Clamp(target.position.y, minY, maxY),
+                transform.position.z);
+        }
+    }
+
+    /// <summary>Back to the limits the camera started with.</summary>
+    public void ResetBounds() => SetBounds(startMin, startMax, snap: true);
+
     private void LateUpdate()
     {
         if (target == null)

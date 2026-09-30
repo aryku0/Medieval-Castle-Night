@@ -10,7 +10,11 @@ public class CandleInteraction : Interactable
     [Header("Timer")]
     public Image timerBar;
 
+    [Tooltip("Burn time in seconds. Beeswax candles (safehouse upgrade) make it 1.5x longer.")]
     public float totalTime = 60f;
+
+    /// <summary>Actual burn time tonight, including the beeswax upgrade.</summary>
+    public float BurnTime => totalTime * (GameState.HasBeeswax ? GameState.BeeswaxBurnMultiplier : 1f);
     public float timePerChunk = 4f;
 
     private bool isLit = false;
@@ -57,7 +61,7 @@ public class CandleInteraction : Interactable
             timeRemaining -= timePerChunk;
             chunkTimer = timePerChunk;
 
-            SetBar(timeRemaining / totalTime, true);
+            SetBar(timeRemaining / BurnTime, true);
 
             // Last chunk left: the flame starts to gutter.
             if (timeRemaining > 0f && timeRemaining <= timePerChunk)
@@ -92,7 +96,7 @@ public class CandleInteraction : Interactable
 
     void Refill()
     {
-        timeRemaining = totalTime;
+        timeRemaining = BurnTime;
         chunkTimer = timePerChunk;
         SetBar(1f, true);
     }

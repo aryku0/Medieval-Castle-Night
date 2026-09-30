@@ -37,7 +37,7 @@ public class GateSystem : MonoBehaviour
     public bool IsPanelOpen => deskOpen || ordersOpen;
     public int ArrestedTonight { get; private set; }
     /// <summary>Everyone arrested so far. Becomes real prisoners when the cellar is built.</summary>
-    public int PrisonersHeld { get; private set; }
+    public int PrisonersHeld => GameState.Prisoners;
     public int LettersTonight { get; private set; }
 
     // ---- debug hooks (used by DebugMenu)
@@ -92,12 +92,6 @@ public class GateSystem : MonoBehaviour
     readonly List<Vector2> hearts = new List<Vector2>();
     bool heartsStarted;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    static void CreateIfMissing()
-    {
-        if (!FindAnyObjectByType<GateSystem>())
-            new GameObject("GateSystem").AddComponent<GateSystem>();
-    }
 
     void Awake()
     {
@@ -222,7 +216,15 @@ public class GateSystem : MonoBehaviour
         GateVerdict correct = GateRules.Evaluate(v, Night, out string reason);
         var night = NightManager.Instance;
 
-        if (chosen == GateVerdict.Arrest) { ArrestedTonight++; PrisonersHeld++; }
+        if (chosen == GateVerdict.Arrest) { ArrestedTonight++; GameState.Prisoners++; }
+
+        // Smallpox night: every person you let in might carry the pox, unless you bought medicine.
+        if (chosen == GateVerdict.Admit && GateRules.HealthCertRequired(Night) && !GameState.HasMedicine
+            && !GameState.SickTonight && Random.value < GameState.InfectionChance)
+        {
+            GameState.SickTonight = true;
+            SleepSystem.Announce("<color=#ff9a7a>You feel feverish... You'll tire much faster tonight.</color>");
+        }
         if (chosen == GateVerdict.Admit && v.kind == VisitorKind.Messenger && correct == GateVerdict.Admit) LettersTonight++;
 
         if (chosen == correct)

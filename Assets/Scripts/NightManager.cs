@@ -38,8 +38,9 @@ public class NightManager : MonoBehaviour
     [Header("Debug HUD")]
     public bool showHud = true;
 
-    public int NightNumber { get; private set; } = 1;
-    public int Purse { get; private set; }
+    // Night number and purse live in GameState so they survive trips to the safehouse.
+    public int NightNumber => GameState.Night;
+    public int Purse => GameState.Purse;
     public NightState State { get; private set; }
     public int Breaches { get; private set; }
     public string FailReason { get; private set; }
@@ -67,15 +68,10 @@ public class NightManager : MonoBehaviour
 
     float elapsedHours;
     int lastNetPay;
+    bool demoOver;
     Transform player;
     Vector3 playerStart;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    static void CreateIfMissing()
-    {
-        if (!FindAnyObjectByType<NightManager>())
-            new GameObject("NightManager").AddComponent<NightManager>();
-    }
 
     void Awake()
     {
@@ -85,6 +81,7 @@ public class NightManager : MonoBehaviour
             return;
         }
         Instance = this;
+        GameState.CastleScene = gameObject.scene.name;
     }
 
     void OnDestroy()
@@ -92,7 +89,7 @@ public class NightManager : MonoBehaviour
         if (Instance == this)
         {
             Instance = null;
-            Time.timeScale = 1f;
+            GameTime.Resume();
         }
     }
 
@@ -169,11 +166,11 @@ public class NightManager : MonoBehaviour
 
     public void DebugStartNight(int night)
     {
-        NightNumber = Mathf.Max(1, night);
+        GameState.Night = Mathf.Max(1, night);
         StartNight();
     }
 
-    public void DebugAddCoins(int coins) { Purse += coins; }
+    public void DebugAddCoins(int coins) { GameState.Purse += coins; }
 
     /// <summary>End the night early as a failure (e.g. overslept, prisoner escaped).</summary>
     public void FailNight(string reason)
@@ -186,6 +183,8 @@ public class NightManager : MonoBehaviour
     void StartNight()
     {
         State = NightState.Running;
+        demoOver = false;
+        GameState.SickTonight = false;
         elapsedHours = 0f;
         Breaches = 0;
         FailReason = null;
@@ -204,12 +203,20 @@ public class NightManager : MonoBehaviour
             }
         }
 
+        // If the night restarts while you're in the cellar, bring the camera back up with you.
+        var cam = Camera.main ? Camera.main.GetComponent<CameraXYFollow>() : null;
+        if (cam) cam.ResetBounds();
+
         NightStarted?.Invoke();
         Debug.Log($"[Night] Night {NightNumber} begins.");
     }
 
     void EndNight(NightState result, string reason)
     {
+        // Owing money costs interest (added while the night still counts as running).
+        if (result == NightState.Survived && GameState.InDebt)
+            AddDeduction("Debt interest", GameState.DebtInterest);
+
         State = result;
         FailReason = reason;
 
@@ -217,7 +224,7 @@ public class NightManager : MonoBehaviour
         if (result == NightState.Survived)
         {
             lastNetPay = nightlyWage - TotalDeductions();
-            Purse += lastNetPay;
+            GameState.Purse += lastNetPay; // pays off any debt first, since debt is a negative purse
         }
 
         Time.timeScale = 0f;
@@ -256,8 +263,10 @@ public class NightManager : MonoBehaviour
 
         string hud = $"Night {NightNumber}   {FormatClock(ClockHours)}\n"
                    + $"Breaches {Breaches}/{maxBreaches}   Candles lit {lit}/{candles}\n"
-                   + $"Purse: {Purse} coins";
-        GUI.Box(new Rect(10, 10, 260, 60), hud);
+                   + $"Purse: {Purse} coins" + (GameState.InDebt ? " (in debt)" : "")
+                   + (GameState.SickTonight ? "   <color=#ff9a7a>Feverish</color>" : "");
+        GUI.Box(new Rect(10, 10, 260, 60), "");
+        GUI.Label(new Rect(16, 12, 252, 58), hud, RichLabel());
 
         if (State == NightState.Running) return;
 
@@ -267,7 +276,17 @@ public class NightManager : MonoBehaviour
         GUI.Box(area, "");
         GUILayout.BeginArea(new Rect(area.x + 16, area.y + 12, w - 32, h - 24));
 
-        if (State == NightState.Survived)
+        if (demoOver)
+        {
+            GUILayout.Label("<b>End of the demo</b>", RichLabel());
+            GUILayout.Space(8);
+            GUILayout.Label($"You survived all {GameState.LastDemoNight} nights of the watch.", RichLabel());
+            GUILayout.Label($"Final purse: {Purse} coins. Prisoners taken: {GameState.Prisoners}.", RichLabel());
+            GUILayout.Label("Thanks for playing!", RichLabel());
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Start over", GUILayout.Height(32))) GameState.StartOver();
+        }
+        else if (State == NightState.Survived)
         {
             GUILayout.Label($"<b>Dawn breaks. Night {NightNumber} survived.</b>", RichLabel());
             GUILayout.Space(8);
@@ -279,12 +298,20 @@ public class NightManager : MonoBehaviour
             }
             if (deductionOrder.Count == 0) GUILayout.Label("No deductions. The captain is pleased.");
             GUILayout.Space(6);
-            GUILayout.Label($"<b>Take-home: {lastNetPay}</b>   Purse: {Purse}", RichLabel());
+            GUILayout.Label($"<b>Take-home: {lastNetPay}</b>   Purse: {Purse}" + (GameState.InDebt ? " <color=#ff9a7a>(still in debt)</color>" : ""), RichLabel());
             GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Next night", GUILayout.Height(32)))
+            if (NightNumber >= GameState.LastDemoNight)
             {
-                NightNumber++;
-                StartNight();
+                if (GUILayout.Button("Finish", GUILayout.Height(32))) demoOver = true;
+            }
+            else if (GUILayout.Button("Go home", GUILayout.Height(32)))
+            {
+                // No safehouse scene yet? Carry straight on to the next night here.
+                if (!GameState.GoHome())
+                {
+                    GameState.Night++;
+                    StartNight();
+                }
             }
         }
         else

@@ -1,10 +1,9 @@
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
 /// F1 debug panel for testing each system without waiting around.
-/// Only compiled into the Unity editor and development builds; players never see it.
+/// Only created in the Unity editor and development builds (Debug.isDebugBuild); players never see it.
 /// Every new feature should get its own section here.
 /// </summary>
 public class DebugMenu : MonoBehaviour
@@ -16,8 +15,14 @@ public class DebugMenu : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void CreateIfMissing()
     {
+        // Only in the editor and development builds; players never get it.
+        if (!Debug.isDebugBuild) return;
         if (!FindAnyObjectByType<DebugMenu>())
-            new GameObject("DebugMenu").AddComponent<DebugMenu>();
+        {
+            var go = new GameObject("DebugMenu");
+            go.AddComponent<DebugMenu>();
+            DontDestroyOnLoad(go); // stays across castle / safehouse
+        }
     }
 
     void Update()
@@ -43,6 +48,8 @@ public class DebugMenu : MonoBehaviour
         scroll = GUILayout.BeginScrollView(scroll);
 
         TimeSection();
+        PlacesSection();
+        MoneySection();
         GateSection();
         WindowSection();
         CandleSection();
@@ -66,17 +73,68 @@ public class DebugMenu : MonoBehaviour
             if (GUILayout.Button($"x{s}")) SetSpeed(s);
         GUILayout.EndHorizontal();
 
-        if (!night) return;
-        GUILayout.BeginHorizontal();
-        if (GUILayout.Button("+1 hour")) night.DebugSkipHours(1f);
-        if (GUILayout.Button("Skip to dawn")) night.DebugSkipToDawn();
-        if (GUILayout.Button("Fail night")) night.FailNight("Failed from the debug menu.");
-        GUILayout.EndHorizontal();
+        if (night)
+        {
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("+1 hour")) night.DebugSkipHours(1f);
+            if (GUILayout.Button("Skip to dawn")) night.DebugSkipToDawn();
+            if (GUILayout.Button("Fail night")) night.FailNight("Failed from the debug menu.");
+            GUILayout.EndHorizontal();
+        }
 
         GUILayout.BeginHorizontal();
         for (int n = 1; n <= 3; n++)
-            if (GUILayout.Button($"Night {n}")) night.DebugStartNight(n);
-        if (GUILayout.Button("+50 coins")) night.DebugAddCoins(50);
+            if (GUILayout.Button($"Night {n}"))
+            {
+                if (night) night.DebugStartNight(n);
+                else { GameState.Night = n; GameState.GoToWork(); }
+            }
+        GUILayout.EndHorizontal();
+    }
+
+    void PlacesSection()
+    {
+        bool any = false;
+        foreach (var item in Interactable.All.ToArraySafe())
+        {
+            if (!(item is TeleportDoor door) || !door.destination) continue;
+            if (!any) { Section("Places"); any = true; }
+            if (GUILayout.Button($"Use {door.name} ({door.prompt.Replace("[E] ", "")})"))
+            {
+                var hero = GameObject.FindGameObjectWithTag("Player");
+                if (hero) door.Interact(hero);
+            }
+        }
+    }
+
+    void MoneySection()
+    {
+        Section("Money & safehouse");
+        GUILayout.Label($"Purse {GameState.Purse} · days in debt {GameState.DaysInDebt} · bills {(GameState.BillsPaidToday ? "paid" : "unpaid")} · prisoners {GameState.Prisoners}", info);
+
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("+50 coins")) GameState.Purse += 50;
+        if (GUILayout.Button("-30 coins")) GameState.Purse -= 30;
+        if (GUILayout.Button("Clear debt")) { if (GameState.Purse < 0) GameState.Purse = 0; GameState.DaysInDebt = 0; }
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
+        GameState.HasStool = GUILayout.Toggle(GameState.HasStool, " Stool");
+        GameState.HasBeeswax = GUILayout.Toggle(GameState.HasBeeswax, " Beeswax");
+        GameState.HasMedicine = GUILayout.Toggle(GameState.HasMedicine, " Medicine");
+        GUILayout.EndHorizontal();
+        GameState.SickTonight = GUILayout.Toggle(GameState.SickTonight, " Feverish tonight (2x tiredness)");
+
+        GUILayout.BeginHorizontal();
+        if (NightManager.Instance)
+        {
+            if (GUILayout.Button("Go home now")) GameState.GoHome();
+        }
+        else if (GUILayout.Button("Go to work (next night)"))
+        {
+            GameState.Night++;
+            GameState.GoToWork();
+        }
         GUILayout.EndHorizontal();
     }
 
@@ -175,4 +233,3 @@ static class DebugListExtensions
         return copy;
     }
 }
-#endif

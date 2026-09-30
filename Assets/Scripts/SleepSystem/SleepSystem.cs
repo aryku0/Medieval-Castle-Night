@@ -102,12 +102,6 @@ public class SleepSystem : MonoBehaviour
     const float CaptionSeconds = 4.5f;
     const int MaxCaptions = 4;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    static void CreateIfMissing()
-    {
-        if (!FindAnyObjectByType<SleepSystem>())
-            new GameObject("SleepSystem").AddComponent<SleepSystem>();
-    }
 
     void Awake()
     {
@@ -195,7 +189,8 @@ public class SleepSystem : MonoBehaviour
         switch (State)
         {
             case SleepState.Up:
-                Tiredness += dt / (minutesToExhaustion * 60f);
+                // Smallpox fever (caught at the gate without medicine) doubles how fast you tire.
+                Tiredness += dt / (minutesToExhaustion * 60f) * (GameState.SickTonight ? 2f : 1f);
                 if (Tiredness >= 1f)
                 {
                     Tiredness = 1f;
@@ -325,6 +320,9 @@ public class SleepSystem : MonoBehaviour
     string Direction(Vector3 worldPosition)
     {
         if (!player) return "";
+        float dy = worldPosition.y - player.position.y;
+        if (dy > 6f) return " upstairs";      // you're down in the cellar
+        if (dy < -6f) return " in the cellar"; // you're upstairs
         float dx = worldPosition.x - player.position.x;
         if (Mathf.Abs(dx) < 3f) return " close by";
         return dx < 0f ? " to your left" : " to your right";
