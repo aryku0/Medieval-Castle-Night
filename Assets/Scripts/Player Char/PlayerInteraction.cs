@@ -11,9 +11,8 @@ public class PlayerInteraction : MonoBehaviour
     void Update()
     {
         // No interacting while the pay slip / failure screen is up.
-        // ...or while resting/asleep (SleepSystem handles E to get up).
-        if ((NightManager.Instance && !NightManager.Instance.IsRunning)
-            || (SleepSystem.Instance && SleepSystem.Instance.IsResting))
+        // ...or while resting/asleep or at the gate desk (those systems handle their own keys).
+        if ((NightManager.Instance && !NightManager.Instance.IsRunning) || InputBlock.PlayerFrozen)
         {
             Interactable.Focused = null;
             return;
@@ -48,6 +47,29 @@ public class PlayerInteraction : MonoBehaviour
             }
         }
         return best;
+    }
+
+    // ---------------------------------------------------------------- on-screen prompt
+
+    static GUIStyle promptStyle;
+
+    void OnGUI()
+    {
+        var target = Interactable.Focused;
+        if (!target || !Camera.main) return;
+        string text = target.Prompt;
+        if (string.IsNullOrEmpty(text)) return;
+
+        Vector3 point = Camera.main.WorldToScreenPoint(target.PromptPosition);
+        if (point.z <= 0f) return;
+
+        if (promptStyle == null)
+            promptStyle = new GUIStyle(GUI.skin.box) { fontSize = 14, alignment = TextAnchor.MiddleCenter, richText = true };
+
+        Vector2 size = promptStyle.CalcSize(new GUIContent(text)) + new Vector2(14f, 6f);
+        float x = Mathf.Clamp(point.x - size.x / 2f, 4f, Screen.width - size.x - 4f);
+        float y = Mathf.Clamp(Screen.height - point.y - target.PromptLiftPixels - size.y, 4f, Screen.height - size.y - 4f);
+        GUI.Box(new Rect(x, y, size.x, size.y), text, promptStyle);
     }
 
     void OnDrawGizmosSelected()

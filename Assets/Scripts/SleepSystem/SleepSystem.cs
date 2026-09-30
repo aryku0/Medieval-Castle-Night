@@ -79,11 +79,23 @@ public class SleepSystem : MonoBehaviour
 
     // One-off explanation panels (once per play session). Game is paused while one is up.
     static bool shownRestTip, shownSleepTip;
+
+    // ---- debug hooks (used by DebugMenu)
+    public enum DebugCatchMode { Normal, Always, Never }
+    public static DebugCatchMode DebugCatch = DebugCatchMode.Normal;
+    public static void DebugResetTips() { shownRestTip = shownSleepTip = false; }
+    public void DebugSetTiredness(float value) { Tiredness = Mathf.Clamp01(value); }
+    public void DebugFallAsleep()
+    {
+        if (State == SleepState.Asleep) return;
+        if (State == SleepState.Up) BeginRest(1f, forced: false);
+        if (State == SleepState.Resting) FallAsleep();
+    }
     string tipTitle, tipBody;
     public bool IsShowingTip => tipTitle != null;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ResetSessionTips() { shownRestTip = shownSleepTip = false; }
+    static void ResetSessionTips() { shownRestTip = shownSleepTip = false; DebugCatch = DebugCatchMode.Normal; }
 
     struct Caption { public string text; public float until; }
     readonly List<Caption> captions = new List<Caption>();
@@ -153,6 +165,18 @@ public class SleepSystem : MonoBehaviour
     {
         if (Instance && Instance.IsResting)
             Instance.Say($"<i>...{text}{Instance.Direction(worldPosition)}</i>");
+    }
+
+    /// <summary>A caption that always shows (awake or resting), e.g. the gate bell, with a direction.</summary>
+    public static void Announce(string text, Vector3 worldPosition)
+    {
+        if (Instance) Instance.Say(text + Instance.Direction(worldPosition) + ".");
+    }
+
+    /// <summary>A caption that always shows, no direction.</summary>
+    public static void Announce(string text)
+    {
+        if (Instance) Instance.Say(text);
     }
 
     // ---------------------------------------------------------------- simulation
@@ -234,7 +258,7 @@ public class SleepSystem : MonoBehaviour
     {
         State = SleepState.Asleep;
         asleepTimer = Random.Range(asleepSeconds.x, Mathf.Max(asleepSeconds.x, asleepSeconds.y));
-        willBeCaught = Random.value < chanceOfBeingCaught;
+        willBeCaught = DebugCatch == DebugCatchMode.Always || (DebugCatch == DebugCatchMode.Normal && Random.value < chanceOfBeingCaught);
         Say("You sink into a deep sleep...");
 
         if (!shownSleepTip)
@@ -287,7 +311,7 @@ public class SleepSystem : MonoBehaviour
     void CloseTip()
     {
         tipTitle = tipBody = null;
-        if (NightRunning) Time.timeScale = 1f;
+        if (NightRunning) GameTime.Resume();
     }
 
     // ---------------------------------------------------------------- captions

@@ -155,6 +155,26 @@ public class NightManager : MonoBehaviour
         deductionEach[label] = amount;
     }
 
+    // ---------------------------------------------------------------- debug hooks (used by DebugMenu)
+
+    public void DebugSkipHours(float hours)
+    {
+        if (IsRunning) elapsedHours = Mathf.Min(elapsedHours + hours, NightLengthHours - 0.01f);
+    }
+
+    public void DebugSkipToDawn()
+    {
+        if (IsRunning) elapsedHours = NightLengthHours; // Update ends the night next frame
+    }
+
+    public void DebugStartNight(int night)
+    {
+        NightNumber = Mathf.Max(1, night);
+        StartNight();
+    }
+
+    public void DebugAddCoins(int coins) { Purse += coins; }
+
     /// <summary>End the night early as a failure (e.g. overslept, prisoner escaped).</summary>
     public void FailNight(string reason)
     {
@@ -172,7 +192,7 @@ public class NightManager : MonoBehaviour
         deductionOrder.Clear();
         deductionCount.Clear();
         deductionEach.Clear();
-        Time.timeScale = 1f;
+        GameTime.Resume();
 
         if (player)
         {

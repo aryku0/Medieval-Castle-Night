@@ -51,11 +51,11 @@ public class PlayerMovement : MonoBehaviour
         // Re-check every step, so walking off a ledge clears grounded.
         grounded = rb.IsTouching(groundFilter);
 
-        // Tiredness slows you down; resting/asleep freezes you in place.
+        // Tiredness slows you down; resting/asleep or an open gate panel freezes you in place.
         var sleep = SleepSystem.Instance;
-        float speedScale = sleep ? sleep.SpeedMultiplier : 1f;
-        bool resting = sleep && sleep.IsResting;
-        if (resting) jumpPressed = false;
+        bool frozen = InputBlock.PlayerFrozen;
+        float speedScale = frozen ? 0f : (sleep ? sleep.SpeedMultiplier : 1f);
+        if (frozen) jumpPressed = false;
 
         // Horizontal movement
         rb.linearVelocity = new Vector2(
@@ -78,7 +78,7 @@ public class PlayerMovement : MonoBehaviour
 
         // Remember which direction the player is facing.
         // We are NOT visually flipping the temporary capsule.
-        if (resting) return;
+        if (frozen) return;
         if (movementInput.x > 0)
         {
             facingRight = true;

@@ -78,6 +78,10 @@ public class CandleInteraction : Interactable
             Refill();
     }
 
+    // ---- debug hooks (used by DebugMenu)
+    public void DebugLight() { if (!isLit) LightCandle(); else Refill(); }
+    public void DebugBurnOut() { if (isLit) ExtinguishCandle(); }
+
     void LightCandle()
     {
         isLit = true;

@@ -34,6 +34,10 @@ public sealed class SecurityWindow : Interactable
 
     public override string Prompt => "[Hold E] Latch";
 
+    // Sit the prompt just above this window's status label.
+    public override Vector3 PromptPosition => transform.position + Vector3.up * 1.25f;
+    public override float PromptLiftPixels => 18f;
+
     protected override void Awake()
     {
         base.Awake();
@@ -88,7 +92,7 @@ public sealed class SecurityWindow : Interactable
                 if (rollTimer <= 0f)
                 {
                     rollTimer += rollInterval;
-                    if (Random.value < attemptChance * ChanceMultiplier && WindowsUnderAttack() < maxWindowsAtOnce)
+                    if (DebugRandomAttacks && Random.value < attemptChance * ChanceMultiplier && WindowsUnderAttack() < maxWindowsAtOnce)
                     {
                         attacking = true;
                         SleepSystem.Cue("something scrapes at a window shutter", transform.position);
@@ -124,6 +128,43 @@ public sealed class SecurityWindow : Interactable
         rollTimer = rollInterval;
     }
 
+    /// <summary>Start an attempt right now (used by decoys and people you wrongly let in).</summary>
+    public bool ForceAttack()
+    {
+        if (attacking || breachedUntil > 0f || !isActiveAndEnabled) return false;
+        attacking = true;
+        waitTimer = 0f;
+        SleepSystem.Cue("something scrapes at a window shutter", transform.position);
+        return true;
+    }
+
+    // ---- debug hooks (used by DebugMenu)
+    public static bool DebugRandomAttacks = true;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetDebug() { DebugRandomAttacks = true; ChanceMultiplier = 1f; }
+
+    public static int DebugForceAll()
+    {
+        int n = 0;
+        foreach (var item in All)
+            if (item is SecurityWindow w && w.ForceAttack()) n++;
+        return n;
+    }
+
+    public string DebugStatus =>
+        breachedUntil > 0f ? "BREACHED" : attacking ? $"opening {Mathf.RoundToInt(Opening * 100)}%" : waitTimer > 0f ? $"quiet {Mathf.CeilToInt(waitTimer)}s" : "latched";
+
+    /// <summary>Force an attempt on a random window that isn't already under attack.</summary>
+    public static bool ForceRandomAttack()
+    {
+        var free = new System.Collections.Generic.List<SecurityWindow>();
+        foreach (var item in All)
+            if (item is SecurityWindow w && !w.attacking && w.breachedUntil <= 0f && w.isActiveAndEnabled) free.Add(w);
+        if (free.Count == 0) return false;
+        return free[Random.Range(0, free.Count)].ForceAttack();
+    }
+
     static int WindowsUnderAttack()
     {
         int count = 0;
@@ -138,7 +179,6 @@ public sealed class SecurityWindow : Interactable
         Vector3 point = Camera.main.WorldToScreenPoint(transform.position + Vector3.up * 1.25f);
         if (point.z <= 0 || point.x < 0 || point.x > Screen.width) return;
         string status = breachedUntil > 0f ? "BREACH!" : Opening >= 0.65f ? "INTRUDER!" : attacking ? "Window opening..." : "Latched";
-        if (Focused == this) status += "  " + Prompt;
         if (Breaches > 0) status += "  Breaches: " + Breaches;
         GUI.Box(new Rect(point.x - 135f, Screen.height - point.y - 15f, 270f, 28f), status);
     }

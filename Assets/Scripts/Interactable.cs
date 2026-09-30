@@ -41,6 +41,23 @@ public abstract class Interactable : MonoBehaviour
     public virtual bool CanInteract => isActiveAndEnabled;
     public virtual string Prompt => "[E] Use";
 
+    /// <summary>World point the on-screen prompt sits above: top of the collider, or just above the object.</summary>
+    public virtual Vector3 PromptPosition
+    {
+        get
+        {
+            if (ownCollider && ownCollider.enabled)
+            {
+                var b = ownCollider.bounds;
+                return new Vector3(b.center.x, b.max.y, transform.position.z);
+            }
+            return transform.position + Vector3.up * 0.8f;
+        }
+    }
+
+    /// <summary>Extra screen pixels to lift the prompt (e.g. to clear a status label).</summary>
+    public virtual float PromptLiftPixels => 8f;
+
     /// <summary>Called once when E is pressed.</summary>
     public virtual void Interact(GameObject player) { }
 
