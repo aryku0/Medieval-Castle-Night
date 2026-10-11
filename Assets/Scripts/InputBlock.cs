@@ -8,5 +8,6 @@ public static class InputBlock
     public static bool PlayerFrozen =>
         (SleepSystem.Instance && SleepSystem.Instance.IsResting)
         || (GateSystem.Instance && GateSystem.Instance.IsPanelOpen)
-        || (SafehouseManager.Instance && SafehouseManager.Instance.IsPanelOpen);
+        || (SafehouseManager.Instance && SafehouseManager.Instance.IsPanelOpen)
+        || (LetterSystem.Instance && LetterSystem.Instance.IsPanelOpen);
 }

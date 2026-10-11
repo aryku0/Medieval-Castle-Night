@@ -36,8 +36,8 @@ public class GateSystem : MonoBehaviour
     public bool VisitorWaiting => current != null;
     public bool IsPanelOpen => deskOpen || ordersOpen;
     public int ArrestedTonight { get; private set; }
-    /// <summary>Everyone arrested so far. Becomes real prisoners when the cellar is built.</summary>
-    public int PrisonersHeld => GameState.Prisoners;
+    /// <summary>False when every cell in the cellar is taken (the Arrest button greys out).</summary>
+    public static bool CellarHasRoom => !PrisonSystem.Instance || PrisonSystem.Instance.HasRoom;
     public int LettersTonight { get; private set; }
 
     // ---- debug hooks (used by DebugMenu)
@@ -47,11 +47,12 @@ public class GateSystem : MonoBehaviour
     static void ResetDebug() { DebugInfinitePatience = false; }
 
     /// <summary>Replace whoever is at the gate with a new visitor of this kind, right now.</summary>
-    public void DebugSpawn(VisitorKind kind, bool forceDecoy = false)
+    public void DebugSpawn(VisitorKind kind, bool forceDecoy = false, bool honestForger = false)
     {
         if (!Active || !NightRunning) return;
         current = VisitorGenerator.Create(kind, Night, ladyDecoyChance);
         if (kind == VisitorKind.Lady && forceDecoy) current.isDecoy = true;
+        if (honestForger && !current.IsLady) VisitorGenerator.MakeHonestForger(current, Night);
         patience = patienceSeconds;
         deskOpen = false;
         heartsStarted = false;
@@ -82,7 +83,15 @@ public class GateSystem : MonoBehaviour
     bool Active => Gate.Instance != null;
 
     // ---- internal state
-    readonly List<VisitorKind> lineup = new List<VisitorKind>();
+    // Tonight's visitors, made at dusk so letters can mention people who haven't arrived yet.
+    readonly List<Visitor> planned = new List<Visitor>();
+
+    /// <summary>The next visitor of this kind still to arrive tonight (or null).</summary>
+    public Visitor PeekUpcoming(VisitorKind kind)
+    {
+        foreach (var v in planned) if (v.kind == kind) return v;
+        return null;
+    }
     Visitor current;
     float patience;
     float arrivalTimer;
@@ -121,8 +130,10 @@ public class GateSystem : MonoBehaviour
         deskOpen = false;
         ArrestedTonight = 0;
         LettersTonight = 0;
-        lineup.Clear();
-        lineup.AddRange(VisitorGenerator.Lineup(Night, visitorsPerNight));
+        planned.Clear();
+        foreach (var kind in VisitorGenerator.Lineup(Night, visitorsPerNight))
+            planned.Add(VisitorGenerator.Create(kind, Night, ladyDecoyChance));
+        VisitorGenerator.AddHonestForgers(planned, Night);
 
         float nightSeconds = NightManager.Instance ? NightManager.Instance.realMinutesPerNight * 60f : 600f;
         spacing = Mathf.Max(15f, (nightSeconds - firstVisitorDelay - 45f) / visitorsPerNight);
@@ -170,11 +181,10 @@ public class GateSystem : MonoBehaviour
 
         // Arrivals: one visitor at the gate at a time.
         arrivalTimer -= dt;
-        if (current == null && arrivalTimer <= 0f && lineup.Count > 0)
+        if (current == null && arrivalTimer <= 0f && planned.Count > 0)
         {
-            var kind = lineup[0];
-            lineup.RemoveAt(0);
-            current = VisitorGenerator.Create(kind, Night, ladyDecoyChance);
+            current = planned[0];
+            planned.RemoveAt(0);
             patience = patienceSeconds;
             heartsStarted = false;
             hearts.Clear();
@@ -216,7 +226,12 @@ public class GateSystem : MonoBehaviour
         GateVerdict correct = GateRules.Evaluate(v, Night, out string reason);
         var night = NightManager.Instance;
 
-        if (chosen == GateVerdict.Arrest) { ArrestedTonight++; GameState.Prisoners++; }
+        if (chosen == GateVerdict.Arrest)
+        {
+            if (!CellarHasRoom) return; // the button is greyed out, but just in case
+            ArrestedTonight++;
+            if (PrisonSystem.Instance) PrisonSystem.Instance.Arrest(v);
+        }
 
         // Smallpox night: every person you let in might carry the pox, unless you bought medicine.
         if (chosen == GateVerdict.Admit && GateRules.HealthCertRequired(Night) && !GameState.HasMedicine
@@ -225,7 +240,12 @@ public class GateSystem : MonoBehaviour
             GameState.SickTonight = true;
             SleepSystem.Announce("<color=#ff9a7a>You feel feverish... You'll tire much faster tonight.</color>");
         }
-        if (chosen == GateVerdict.Admit && v.kind == VisitorKind.Messenger && correct == GateVerdict.Admit) LettersTonight++;
+        // Any messenger you let in hands over a letter for the letter box.
+        if (chosen == GateVerdict.Admit && v.kind == VisitorKind.Messenger)
+        {
+            LettersTonight++;
+            if (LetterSystem.Instance) LetterSystem.Instance.Receive(LetterSystem.Instance.CreateLetter());
+        }
 
         if (chosen == correct)
         {
@@ -309,6 +329,7 @@ public class GateSystem : MonoBehaviour
 
     void OnGUI()
     {
+        UIScale.Apply(); // scale the whole UI with the screen
         if (!Active || !NightRunning) return;
         Styles();
         GUI.depth = -50;
@@ -326,15 +347,15 @@ public class GateSystem : MonoBehaviour
         if (current != null && !deskOpen && patience < 10f) gate = $"<color=#ff8866>{gate}</color>";
         string text = gate + $"\nArrested tonight: {ArrestedTonight}";
         if (GateRules.MessengersNeedSeal(Night)) text += $"   Letters: {LettersTonight}";
-        GUI.Box(new Rect(Screen.width - 250, 10, 240, 48), "");
-        GUI.Label(new Rect(Screen.width - 244, 12, 232, 46), text, rich);
+        GUI.Box(new Rect(UIScale.Width - 250, 10, 240, 48), "");
+        GUI.Label(new Rect(UIScale.Width - 244, 12, 232, 46), text, rich);
     }
 
     void DrawOrders()
     {
         const float w = 560f, h = 380f;
-        var r = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
-        Fill(new Rect(0, 0, Screen.width, Screen.height), new Color(0, 0, 0, 0.6f));
+        var r = new Rect((UIScale.Width - w) / 2f, (UIScale.Height - h) / 2f, w, h);
+        Fill(new Rect(0, 0, UIScale.Width, UIScale.Height), new Color(0, 0, 0, 0.6f));
         Fill(r, new Color(0.16f, 0.13f, 0.1f, 0.98f));
         Fill(new Rect(r.x, r.y, w, 3), new Color(0.75f, 0.6f, 0.3f));
         GUILayout.BeginArea(new Rect(r.x + 22, r.y + 16, w - 44, h - 32));
@@ -347,7 +368,7 @@ public class GateSystem : MonoBehaviour
     void DrawDesk()
     {
         const float w = 780f, h = 470f;
-        var r = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f - 20f, w, h);
+        var r = new Rect((UIScale.Width - w) / 2f, (UIScale.Height - h) / 2f - 20f, w, h);
         Fill(r, new Color(0.14f, 0.11f, 0.08f, 0.97f));
         Fill(new Rect(r.x, r.y, w, 3), new Color(0.75f, 0.6f, 0.3f));
 
@@ -386,7 +407,10 @@ public class GateSystem : MonoBehaviour
         {
             if (GUI.Button(new Rect(r.x + 18, by, 120, 38), "<b>Admit</b>", ButtonRich())) Decide(GateVerdict.Admit);
             if (GUI.Button(new Rect(r.x + 146, by, 120, 38), "<b>Deny</b>", ButtonRich())) Decide(GateVerdict.Deny);
-            if (GUI.Button(new Rect(r.x + 274, by, 120, 38), "<b>Arrest</b>", ButtonRich())) Decide(GateVerdict.Arrest);
+            bool room = CellarHasRoom;
+            GUI.enabled = room;
+            if (GUI.Button(new Rect(r.x + 274, by, 120, 38), room ? "<b>Arrest</b>" : "Cellar full", ButtonRich())) Decide(GateVerdict.Arrest);
+            GUI.enabled = true;
             if (GUI.Button(new Rect(r.x + 420, by, 150, 38), showRulebook ? "Show papers" : "Open rulebook")) showRulebook = !showRulebook;
         }
         if (GUI.Button(new Rect(r.xMax - 168, by, 150, 38), "Step away (E)")) deskOpen = false;

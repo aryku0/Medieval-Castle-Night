@@ -3,7 +3,8 @@ using UnityEngine;
 
 /// <summary>
 /// Makes up visitors and their papers. Honest people sometimes have a problem
-/// with their papers (deny); smugglers always carry a forgery (arrest).
+/// with their papers (deny); smugglers always carry a forgery (arrest), and so do the odd
+/// desperate traveller or merchant who bought one (AddHonestForgers).
 /// </summary>
 public static class VisitorGenerator
 {
@@ -40,6 +41,7 @@ public static class VisitorGenerator
     static readonly string[] MerchantLines = { "Goods for the castle kitchens, good sir.", "I've business with the steward, let me through.", "Fine wares for fine lords!" };
     static readonly string[] SmugglerLines = { "Nothing to see here, friend. Just let me in.", "Quick now, I haven't got all night.", "All my papers are proper, I swear it." };
     static readonly string[] MessengerLines = { "Urgent letters for the castle!", "Post from the south. Let me in, quickly.", "I carry word for his lordship." };
+    static readonly string[] ForgerLines = { "Please, my children are inside the walls.", "I paid good money for this pass. It's proper, isn't it?", "I beg you, sir, just let me through." };
     static readonly string[] LadyLines = { "Oh, what a handsome guard...", "Such a lonely night to stand watch alone.", "Won't you keep a lady company?" };
 
     static T Pick<T>(IList<T> list) => list[Random.Range(0, list.Count)];
@@ -93,22 +95,7 @@ public static class VisitorGenerator
 
         // Start with a perfectly valid set of papers...
         v.spokenName = RandomName();
-        v.hasPass = true;
-        v.passName = v.spokenName;
-        v.passTown = Pick(GateRules.ApprovedTowns);
-        v.passExpiryDay = today + Random.Range(0, 6);
-        v.passStamp = GateRules.GenuineStamp;
-        if (kind == VisitorKind.Messenger && GateRules.MessengersNeedSeal(night))
-        {
-            v.hasLordsSeal = true;
-            v.lordsSeal = GateRules.GenuineLordsSeal;
-        }
-        if (GateRules.HealthCertRequired(night))
-        {
-            v.hasHealthCert = true;
-            v.healthCertName = v.spokenName;
-            v.healthCertSignature = GateRules.GenuineHealthSignature;
-        }
+        GiveValidPapers(v, night);
 
         // ...then break something.
         if (kind == VisitorKind.Smuggler) AddForgery(v, night);
@@ -119,6 +106,57 @@ public static class VisitorGenerator
             if (Random.value < flawChance) AddHonestProblem(v, night, today);
         }
         return v;
+    }
+
+    /// <summary>
+    /// Turn 1-2 of tonight's travellers and merchants into honest forgers: ordinary people who
+    /// bought a forged pass. Arresting them is correct, and unlike smugglers they'll talk in the cells.
+    /// </summary>
+    public static void AddHonestForgers(List<Visitor> planned, int night)
+    {
+        var candidates = planned.FindAll(v => v.kind == VisitorKind.Traveller || v.kind == VisitorKind.Merchant);
+        int count = Mathf.Min(candidates.Count, Random.Range(1, 3));
+        for (int i = 0; i < count; i++)
+        {
+            int j = Random.Range(i, candidates.Count);
+            (candidates[i], candidates[j]) = (candidates[j], candidates[i]);
+            MakeHonestForger(candidates[i], night);
+        }
+    }
+
+    public static void MakeHonestForger(Visitor v, int night)
+    {
+        GiveValidPapers(v, night); // clear any honest problem first, so the forgery is the only fault
+        AddForgery(v, night);
+        v.boughtForgery = true;
+        v.greeting = Pick(ForgerLines);
+    }
+
+    static void GiveValidPapers(Visitor v, int night)
+    {
+        int today = GateRules.Day(night);
+        v.hasPass = true;
+        v.passName = v.spokenName;
+        v.passTown = Pick(GateRules.ApprovedTowns);
+        v.passExpiryDay = today + Random.Range(0, 6);
+        v.passStamp = GateRules.GenuineStamp;
+        if (v.kind == VisitorKind.Messenger && GateRules.MessengersNeedSeal(night))
+        {
+            v.hasLordsSeal = true;
+            v.lordsSeal = GateRules.GenuineLordsSeal;
+        }
+        if (GateRules.HealthCertRequired(night))
+        {
+            v.hasHealthCert = true;
+            v.healthCertName = v.spokenName;
+            v.healthCertSignature = GateRules.GenuineHealthSignature;
+        }
+        else
+        {
+            v.hasHealthCert = false;
+            v.healthCertName = null;
+            v.healthCertSignature = null;
+        }
     }
 
     static void AddForgery(Visitor v, int night)

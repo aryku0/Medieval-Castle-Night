@@ -65,6 +65,10 @@ public class NightManager : MonoBehaviour
     readonly List<string> deductionOrder = new List<string>();
     readonly Dictionary<string, int> deductionCount = new Dictionary<string, int>();
     readonly Dictionary<string, int> deductionEach = new Dictionary<string, int>();
+    // Bonuses (e.g. letters delivered), same grouping.
+    readonly List<string> bonusOrder = new List<string>();
+    readonly Dictionary<string, int> bonusCount = new Dictionary<string, int>();
+    readonly Dictionary<string, int> bonusEach = new Dictionary<string, int>();
 
     float elapsedHours;
     int lastNetPay;
@@ -114,6 +118,8 @@ public class NightManager : MonoBehaviour
         if (elapsedHours >= NightLengthHours)
         {
             elapsedHours = NightLengthHours;
+            // Hand over the night's post first: tampering can still cost you the night.
+            if (LetterSystem.Instance && LetterSystem.Instance.DawnHandover(this)) return;
             EndNight(NightState.Survived, null);
         }
     }
@@ -150,6 +156,26 @@ public class NightManager : MonoBehaviour
         }
         deductionCount[label]++;
         deductionEach[label] = amount;
+    }
+
+    /// <summary>Extra pay on the pay slip (e.g. letters delivered).</summary>
+    public void AddBonus(string label, int amount)
+    {
+        if (!IsRunning) return;
+        if (!bonusCount.ContainsKey(label))
+        {
+            bonusOrder.Add(label);
+            bonusCount[label] = 0;
+        }
+        bonusCount[label]++;
+        bonusEach[label] = amount;
+    }
+
+    int TotalBonuses()
+    {
+        int total = 0;
+        foreach (var label in bonusOrder) total += bonusCount[label] * bonusEach[label];
+        return total;
     }
 
     // ---------------------------------------------------------------- debug hooks (used by DebugMenu)
@@ -191,6 +217,9 @@ public class NightManager : MonoBehaviour
         deductionOrder.Clear();
         deductionCount.Clear();
         deductionEach.Clear();
+        bonusOrder.Clear();
+        bonusCount.Clear();
+        bonusEach.Clear();
         GameTime.Resume();
 
         if (player)
@@ -223,7 +252,7 @@ public class NightManager : MonoBehaviour
         lastNetPay = 0;
         if (result == NightState.Survived)
         {
-            lastNetPay = nightlyWage - TotalDeductions();
+            lastNetPay = nightlyWage + TotalBonuses() - TotalDeductions();
             GameState.Purse += lastNetPay; // pays off any debt first, since debt is a negative purse
         }
 
@@ -254,6 +283,7 @@ public class NightManager : MonoBehaviour
 
     void OnGUI()
     {
+        UIScale.Apply(); // scale the whole UI with the screen
         if (!showHud) return;
 
         // Top-left status
@@ -271,8 +301,8 @@ public class NightManager : MonoBehaviour
         if (State == NightState.Running) return;
 
         // End-of-night pay slip
-        const float w = 360f, h = 300f;
-        var area = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
+        const float w = 380f, h = 400f;
+        var area = new Rect((UIScale.Width - w) / 2f, (UIScale.Height - h) / 2f, w, h);
         GUI.Box(area, "");
         GUILayout.BeginArea(new Rect(area.x + 16, area.y + 12, w - 32, h - 24));
 
@@ -281,7 +311,7 @@ public class NightManager : MonoBehaviour
             GUILayout.Label("<b>End of the demo</b>", RichLabel());
             GUILayout.Space(8);
             GUILayout.Label($"You survived all {GameState.LastDemoNight} nights of the watch.", RichLabel());
-            GUILayout.Label($"Final purse: {Purse} coins. Prisoners taken: {GameState.Prisoners}.", RichLabel());
+            GUILayout.Label($"Final purse: {Purse} coins. Prisoners taken: {GameState.TotalArrests}.", RichLabel());
             GUILayout.Label("Thanks for playing!", RichLabel());
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Start over", GUILayout.Height(32))) GameState.StartOver();
@@ -291,12 +321,22 @@ public class NightManager : MonoBehaviour
             GUILayout.Label($"<b>Dawn breaks. Night {NightNumber} survived.</b>", RichLabel());
             GUILayout.Space(8);
             GUILayout.Label($"Wage: +{nightlyWage}");
+            foreach (var label in bonusOrder)
+            {
+                int count = bonusCount[label], each = bonusEach[label];
+                GUILayout.Label($"{label} x{count}: +{count * each}");
+            }
             foreach (var label in deductionOrder)
             {
                 int count = deductionCount[label], each = deductionEach[label];
                 GUILayout.Label($"{label} x{count}: -{count * each}");
             }
             if (deductionOrder.Count == 0) GUILayout.Label("No deductions. The captain is pleased.");
+            if (PrisonSystem.Instance && !string.IsNullOrEmpty(PrisonSystem.Instance.DawnReport))
+            {
+                GUILayout.Space(4);
+                GUILayout.Label($"<i>{PrisonSystem.Instance.DawnReport}</i>", RichLabel());
+            }
             GUILayout.Space(6);
             GUILayout.Label($"<b>Take-home: {lastNetPay}</b>   Purse: {Purse}" + (GameState.InDebt ? " <color=#ff9a7a>(still in debt)</color>" : ""), RichLabel());
             GUILayout.FlexibleSpace();

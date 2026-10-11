@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -31,7 +32,10 @@ public static class GameState
     public static int DaysInDebt;
     public static bool BillsPaidToday;
     public static bool HasStool, HasBeeswax, HasMedicine;
-    public static int Prisoners;
+    /// <summary>Prisoners still in the cellar at the end of the last night (kept for the next one).</summary>
+    public static List<Prisoner> Cellar = new List<Prisoner>();
+    /// <summary>Everyone arrested over the whole game (counted at each dawn).</summary>
+    public static int TotalArrests;
     public static bool SickTonight;
 
     /// <summary>Name of the castle scene, recorded by NightManager when it starts.</summary>
@@ -48,7 +52,8 @@ public static class GameState
         DaysInDebt = 0;
         BillsPaidToday = false;
         HasStool = HasBeeswax = HasMedicine = false;
-        Prisoners = 0;
+        Cellar = new List<Prisoner>();
+        TotalArrests = 0;
         SickTonight = false;
     }
 

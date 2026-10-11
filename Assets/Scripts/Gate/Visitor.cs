@@ -31,6 +31,9 @@ public class Visitor
     public string healthCertName;
     public string healthCertSignature;
 
+    // An ordinary traveller or merchant who bought a forged pass out of desperation (arrest them; they talk in the cells).
+    public bool boughtForgery;
+
     // Ladies only: is she keeping you busy while an accomplice strikes?
     public bool isDecoy;
 

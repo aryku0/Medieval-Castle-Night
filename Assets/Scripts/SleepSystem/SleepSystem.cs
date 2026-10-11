@@ -334,6 +334,7 @@ public class SleepSystem : MonoBehaviour
 
     void OnGUI()
     {
+        UIScale.Apply(); // scale the whole UI with the screen
         if (!NightRunning) return;
         GUI.depth = -100; // draw above the other debug HUDs
 
@@ -347,7 +348,7 @@ public class SleepSystem : MonoBehaviour
         {
             // Tiredness dimming
             float dim = Mathf.InverseLerp(tiredWarningLevel, 1f, Tiredness) * 0.45f;
-            if (dim > 0f) Fill(new Rect(0, 0, Screen.width, Screen.height), new Color(0, 0, 0, dim));
+            if (dim > 0f) Fill(new Rect(0, 0, UIScale.Width, UIScale.Height), new Color(0, 0, 0, dim));
 
             // Small tiredness bar under the NightManager panel
             var bar = new Rect(10, 76, 260, 14);
@@ -356,16 +357,16 @@ public class SleepSystem : MonoBehaviour
                  Tiredness >= tiredWarningLevel ? new Color(0.8f, 0.3f, 0.2f) : new Color(0.75f, 0.7f, 0.5f));
             GUI.Label(new Rect(bar.x, bar.y + 14, bar.width, 18), $"Tiredness {Mathf.RoundToInt(Tiredness * 100)}%", small);
 
-            DrawCaptions(Screen.height * 0.8f);
+            DrawCaptions(UIScale.Height * 0.8f);
             return;
         }
 
         // Eyes closed: near-black screen
-        Fill(new Rect(0, 0, Screen.width, Screen.height), new Color(0, 0, 0, 0.97f));
+        Fill(new Rect(0, 0, UIScale.Width, UIScale.Height), new Color(0, 0, 0, 0.97f));
 
-        float cx = Screen.width / 2f;
+        float cx = UIScale.Width / 2f;
         const float sliderH = 260f, sliderW = 26f;
-        var slider = new Rect(cx - sliderW / 2f, Screen.height / 2f - sliderH / 2f - 40f, sliderW, sliderH);
+        var slider = new Rect(cx - sliderW / 2f, UIScale.Height / 2f - sliderH / 2f - 40f, sliderW, sliderH);
         float Y(float value) => slider.yMax - value * slider.height;
 
         if (State == SleepState.Resting)
@@ -385,8 +386,8 @@ public class SleepSystem : MonoBehaviour
         }
         else
         {
-            GUI.Label(new Rect(cx - 200, Screen.height / 2f - 60, 400, 30), "Zzz...", centered);
-            GUI.Label(new Rect(cx - 200, Screen.height / 2f - 30, 400, 20), "You are fast asleep and cannot move.", small);
+            GUI.Label(new Rect(cx - 200, UIScale.Height / 2f - 60, 400, 30), "Zzz...", centered);
+            GUI.Label(new Rect(cx - 200, UIScale.Height / 2f - 30, 400, 20), "You are fast asleep and cannot move.", small);
         }
 
         GUI.Label(new Rect(cx - 200, slider.yMax + 72, 400, 20), $"Tiredness {Mathf.RoundToInt(Tiredness * 100)}%", small);
@@ -405,7 +406,7 @@ public class SleepSystem : MonoBehaviour
             tipText = new GUIStyle(GUI.skin.label) { wordWrap = true, fontSize = 15, richText = true };
         }
         const float w = 480f, h = 320f;
-        var panel = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
+        var panel = new Rect((UIScale.Width - w) / 2f, (UIScale.Height - h) / 2f, w, h);
         Fill(panel, new Color(0.12f, 0.1f, 0.08f, 0.98f));
         Fill(new Rect(panel.x, panel.y, w, 3), new Color(0.75f, 0.6f, 0.3f));
 
@@ -424,8 +425,10 @@ public class SleepSystem : MonoBehaviour
         float y = top;
         foreach (var c in captions)
         {
-            GUI.Label(new Rect(Screen.width / 2f - 320, y, 640, 26), c.text, centered);
-            y += 26;
+            float w = Mathf.Min(centered.CalcSize(new GUIContent(c.text)).x + 28f, 680f);
+            Fill(new Rect(UIScale.Width / 2f - w / 2f, y + 1, w, 25), new Color(0f, 0f, 0f, 0.6f));
+            GUI.Label(new Rect(UIScale.Width / 2f - 320, y, 640, 26), c.text, centered);
+            y += 28;
         }
     }
 

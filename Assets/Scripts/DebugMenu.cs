@@ -32,6 +32,7 @@ public class DebugMenu : MonoBehaviour
 
     void OnGUI()
     {
+        UIScale.Apply(); // scale the whole UI with the screen
         if (!open) return;
         GUI.depth = -200; // on top of everything
         if (header == null)
@@ -40,7 +41,7 @@ public class DebugMenu : MonoBehaviour
             info = new GUIStyle(GUI.skin.label) { fontSize = 11, richText = true, wordWrap = true };
         }
 
-        var area = new Rect(10, 115, 320, Screen.height - 125);
+        var area = new Rect(10, 115, 320, UIScale.Height - 125);
         GUI.Box(area, "");
         GUI.Box(area, "");
         GUILayout.BeginArea(new Rect(area.x + 6, area.y + 4, area.width - 12, area.height - 8));
@@ -51,6 +52,8 @@ public class DebugMenu : MonoBehaviour
         PlacesSection();
         MoneySection();
         GateSection();
+        LetterSection();
+        PrisonSection();
         WindowSection();
         CandleSection();
         SleepSection();
@@ -110,7 +113,7 @@ public class DebugMenu : MonoBehaviour
     void MoneySection()
     {
         Section("Money & safehouse");
-        GUILayout.Label($"Purse {GameState.Purse} · days in debt {GameState.DaysInDebt} · bills {(GameState.BillsPaidToday ? "paid" : "unpaid")} · prisoners {GameState.Prisoners}", info);
+        GUILayout.Label($"Purse {GameState.Purse} · days in debt {GameState.DaysInDebt} · bills {(GameState.BillsPaidToday ? "paid" : "unpaid")} · in cellar at dusk {GameState.Cellar.Count} · arrests {GameState.TotalArrests}", info);
 
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("+50 coins")) GameState.Purse += 50;
@@ -155,11 +158,62 @@ public class DebugMenu : MonoBehaviour
         if (GUILayout.Button("Lady")) gate.DebugSpawn(VisitorKind.Lady);
         if (GUILayout.Button("Decoy lady")) gate.DebugSpawn(VisitorKind.Lady, forceDecoy: true);
         GUILayout.EndHorizontal();
+        if (GUILayout.Button("Honest forger (bought a forged pass)")) gate.DebugSpawn(VisitorKind.Traveller, honestForger: true);
 
         GUILayout.BeginHorizontal();
         GateSystem.DebugInfinitePatience = GUILayout.Toggle(GateSystem.DebugInfinitePatience, " Infinite patience");
         if (GUILayout.Button("Show orders")) gate.DebugShowOrders();
         GUILayout.EndHorizontal();
+    }
+
+    void LetterSection()
+    {
+        var post = LetterSystem.Instance;
+        Section("Letters");
+        if (!post) { GUILayout.Label("LetterSystem not running.", info); return; }
+        GUILayout.Label(LetterBox.Instance
+            ? $"{post.LettersInBox} in the box (on '{LetterBox.Instance.name}')"
+            : "No LetterBox in the scene: add the Letter Box component to any object.", info);
+        foreach (var l in post.Letters)
+            GUILayout.Label($"- {l.kind} from {l.sender}: {l.SealLabel}", info);
+
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Give me a letter")) post.DebugGiveLetter();
+        if (GUILayout.Button("Open letter box")) post.OpenBox();
+        GUILayout.EndHorizontal();
+    }
+
+    void PrisonSection()
+    {
+        var prison = PrisonSystem.Instance;
+        Section("Prisoners");
+        if (!prison) { GUILayout.Label("PrisonSystem not running.", info); return; }
+        if (!prison.Ready) { GUILayout.Label("No cells set up: use Tools > Nightguard > Set Up Prisoners.", info); return; }
+        GUILayout.Label($"Bread {prison.Bread}/{prison.maxBread} · escapes tonight {prison.EscapesTonight} · arrests tonight {prison.ArrestsTonight}", info);
+        foreach (var cell in PrisonCell.Cells)
+        {
+            var p = cell.Occupant;
+            GUILayout.Label(p == null ? $"Cell {cell.cellNumber}: empty"
+                : $"Cell {cell.cellNumber}: {p.name}{(p.grunter ? " (grunter)" : "")} · food {Mathf.RoundToInt(p.hunger * 100)}% · mood {Mathf.RoundToInt(p.mood * 100)}%"
+                  + (cell.IsForcing ? $" · <color=#ff8866>forcing {Mathf.RoundToInt(cell.Opening * 100)}%</color>" : "")
+                  + (CandleInteraction.IsDark(cell.transform.position) ? " · (dark)" : ""), info);
+        }
+
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Add talker")) prison.DebugAddPrisoner(grunter: false);
+        if (GUILayout.Button("Add grunter")) prison.DebugAddPrisoner(grunter: true);
+        if (GUILayout.Button("Empty cellar")) prison.DebugEmptyCellar();
+        GUILayout.EndHorizontal();
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Starve all")) prison.DebugSetAll(0f, null);
+        if (GUILayout.Button("Mood 0")) prison.DebugSetAll(null, 0f);
+        if (GUILayout.Button("Fed & happy")) prison.DebugSetAll(1f, 1f);
+        GUILayout.EndHorizontal();
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Force a lock")) prison.DebugForceLock();
+        if (GUILayout.Button("Give 4 bread")) prison.DebugFillBread();
+        GUILayout.EndHorizontal();
+        PrisonSystem.DebugRandomEscapes = GUILayout.Toggle(PrisonSystem.DebugRandomEscapes, " Random escape attempts on");
     }
 
     void WindowSection()

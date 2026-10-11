@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -41,12 +42,60 @@ public class CandleInteraction : Interactable
         NightManager.NightStarted -= ResetForNight;
     }
 
-    /// <summary>Every night starts with the candles out.</summary>
+    /// <summary>
+    /// Every night starts with the candles lit, except the one nearest where you start (your first job).
+    /// The lit ones start part-burned at staggered levels, nearest first, so they go out one by one.
+    /// </summary>
     void ResetForNight()
     {
-        isLit = false;
-        SetLitVisuals(false);
-        SetBar(0f, false);
+        var hero = GameObject.FindGameObjectWithTag("Player");
+        Vector3 start = hero ? hero.transform.position : transform.position;
+
+        var candles = new List<CandleInteraction>();
+        foreach (var item in All) if (item is CandleInteraction c) candles.Add(c);
+        candles.Sort((a, b) => Vector2.Distance(a.transform.position, start).CompareTo(Vector2.Distance(b.transform.position, start)));
+        int rank = candles.IndexOf(this);
+
+        if (rank <= 0) // the starting candle (or the only one): out
+        {
+            isLit = false;
+            SetLitVisuals(false);
+            SetBar(0f, false);
+            return;
+        }
+
+        // Spread the others between 40% and 100% burn left, the nearest ones lowest.
+        int others = candles.Count - 1;
+        float level = Mathf.Lerp(startLitMin, 1f, (rank - 0.5f) / others) + Random.Range(-0.05f, 0.05f);
+        isLit = true;
+        SetLitVisuals(true);
+        timeRemaining = BurnTime * Mathf.Clamp(level, 0.1f, 1f);
+        chunkTimer = timePerChunk;
+        SetBar(timeRemaining / BurnTime, true);
+    }
+
+    [Tooltip("Lowest burn level (0-1) a candle can start the night at.")]
+    [Range(0.1f, 1f)] public float startLitMin = 0.4f;
+
+    /// <summary>The candle closest to a point (null if there are none).</summary>
+    public static CandleInteraction Nearest(Vector3 point)
+    {
+        CandleInteraction best = null;
+        float bestDistance = float.PositiveInfinity;
+        foreach (var item in All)
+        {
+            if (!(item is CandleInteraction c)) continue;
+            float d = Vector2.Distance(c.transform.position, point);
+            if (d < bestDistance) { bestDistance = d; best = c; }
+        }
+        return best;
+    }
+
+    /// <summary>Is the candle nearest this point out? Dark spots are where intruders and prisoners try their luck.</summary>
+    public static bool IsDark(Vector3 point)
+    {
+        var c = Nearest(point);
+        return c != null && !c.IsLit;
     }
 
     void Update()

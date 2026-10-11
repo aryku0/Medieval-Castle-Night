@@ -24,6 +24,8 @@ public static class GameBootstrap
         Ensure<NightManager>("NightManager");
         Ensure<SleepSystem>("SleepSystem");
         Ensure<GateSystem>("GateSystem");
+        Ensure<LetterSystem>("LetterSystem");
+        Ensure<PrisonSystem>("PrisonSystem");
     }
 
     static void Ensure<T>(string name) where T : Component

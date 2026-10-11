@@ -55,20 +55,20 @@ public class PlayerInteraction : MonoBehaviour
 
     void OnGUI()
     {
+        UIScale.Apply(); // scale the whole UI with the screen
         var target = Interactable.Focused;
         if (!target || !Camera.main) return;
         string text = target.Prompt;
         if (string.IsNullOrEmpty(text)) return;
 
-        Vector3 point = Camera.main.WorldToScreenPoint(target.PromptPosition);
-        if (point.z <= 0f) return;
+        if (!UIScale.WorldToGui(Camera.main, target.PromptPosition, out Vector2 point)) return;
 
         if (promptStyle == null)
             promptStyle = new GUIStyle(GUI.skin.box) { fontSize = 14, alignment = TextAnchor.MiddleCenter, richText = true };
 
         Vector2 size = promptStyle.CalcSize(new GUIContent(text)) + new Vector2(14f, 6f);
-        float x = Mathf.Clamp(point.x - size.x / 2f, 4f, Screen.width - size.x - 4f);
-        float y = Mathf.Clamp(Screen.height - point.y - target.PromptLiftPixels - size.y, 4f, Screen.height - size.y - 4f);
+        float x = Mathf.Clamp(point.x - size.x / 2f, 4f, UIScale.Width - size.x - 4f);
+        float y = Mathf.Clamp(point.y - target.PromptLiftPixels - size.y, 4f, UIScale.Height - size.y - 4f);
         GUI.Box(new Rect(x, y, size.x, size.y), text, promptStyle);
     }
 

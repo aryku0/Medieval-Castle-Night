@@ -125,12 +125,13 @@ public class SafehouseManager : MonoBehaviour
 
     void OnGUI()
     {
+        UIScale.Apply(); // scale the whole UI with the screen
         Styles();
         GUI.depth = -50;
         DrawHud();
 
         if (!string.IsNullOrEmpty(message) && Time.time < messageUntil)
-            GUI.Label(new Rect(Screen.width / 2f - 320, Screen.height * 0.82f, 640, 30), $"<i>{message}</i>",
+            GUI.Label(new Rect(UIScale.Width / 2f - 320, UIScale.Height * 0.82f, 640, 30), $"<i>{message}</i>",
                 new GUIStyle(rich) { alignment = TextAnchor.MiddleCenter });
 
         switch (Open)
@@ -167,7 +168,7 @@ public class SafehouseManager : MonoBehaviour
     Rect BeginPanel(string title, float h = 300f)
     {
         const float w = 440f;
-        var r = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
+        var r = new Rect((UIScale.Width - w) / 2f, (UIScale.Height - h) / 2f, w, h);
         var old = GUI.color;
         GUI.color = new Color(0.14f, 0.11f, 0.08f, 0.97f);
         GUI.DrawTexture(r, Texture2D.whiteTexture);
